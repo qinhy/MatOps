@@ -5,12 +5,14 @@ import pytest
 import torch
 
 from matops import (
+    CupyMatOps,
     DataType,
     MatDevice,
     MatLib,
     NumpyMatOps,
     TorchMatOps,
     to_ctypes_type,
+    to_cupy_type,
     to_np_type,
     to_torch_type,
     to_type_name,
@@ -68,3 +70,20 @@ def test_type_map_helpers():
     assert to_np_type("float32") is np.float32
     assert to_torch_type("float32") is torch.float32
     assert to_ctypes_type("float32") is ctypes.c_float
+
+
+def test_cupy_is_optional():
+    try:
+        import cupy as cp
+    except ImportError:
+        with pytest.raises(ImportError, match="CuPy support is optional"):
+            CupyMatOps().zeros((1,), dtype=np.float32)
+        with pytest.raises(ImportError, match="CuPy support is optional"):
+            to_cupy_type("float32")
+    else:
+        assert to_cupy_type("float32") is cp.float32
+
+
+def test_unknown_none_dtype_does_not_match_missing_optional_mapping():
+    with pytest.raises(TypeError):
+        to_type_name(None)

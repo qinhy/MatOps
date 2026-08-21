@@ -8,5 +8,7 @@ Keep changes focused on the library's small backend-neutral operation surface.
 4. Run `ruff check .`.
 5. Open a pull request explaining the behavior being added or changed.
 
-When adding an operation, implement it consistently in both `NumpyMatOps` and
-`TorchMatOps` whenever the backends provide equivalent semantics.
+When adding an operation, implement it consistently in `NumpyMatOps`,
+`TorchMatOps`, and `CupyMatOps` whenever the backends provide equivalent
+semantics. CuPy-specific tests should skip cleanly when CuPy or CUDA is not
+available.

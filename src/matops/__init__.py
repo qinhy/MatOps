@@ -1,7 +1,8 @@
-"""Backend-neutral matrix/tensor operations for NumPy and PyTorch."""
+"""Backend-neutral matrix/tensor operations for NumPy, PyTorch, and CuPy."""
 
 from .mat import (
     ArrayLike,
+    CupyMatOps,
     DataType,
     MatDevice,
     MatLib,
@@ -10,6 +11,7 @@ from .mat import (
     TorchMatOps,
     TypeMap,
     to_ctypes_type,
+    to_cupy_type,
     to_np_type,
     to_torch_type,
     to_type_name,
@@ -17,6 +19,7 @@ from .mat import (
 
 __all__ = [
     "ArrayLike",
+    "CupyMatOps",
     "DataType",
     "MatDevice",
     "MatLib",
@@ -25,9 +28,10 @@ __all__ = [
     "TorchMatOps",
     "TypeMap",
     "to_ctypes_type",
+    "to_cupy_type",
     "to_np_type",
     "to_torch_type",
     "to_type_name",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

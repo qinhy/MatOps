@@ -2,19 +2,49 @@ from __future__ import annotations
 
 import ctypes
 import enum
+from contextlib import nullcontext
 from typing import Any, ClassVar, Optional, Sequence, Union
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 import torch
 
-ArrayLike = Union[np.ndarray,torch.Tensor]
+try:
+    import cupy as cp
+except ImportError:  # CuPy is an optional, CUDA-specific dependency.
+    cp = None
+
+if cp is not None:
+    ArrayLike = Union[np.ndarray, torch.Tensor, cp.ndarray]
+else:
+    ArrayLike = Union[np.ndarray, torch.Tensor]
+
+
+def _require_cupy():
+    if cp is None:
+        raise ImportError(
+            "CuPy support is optional. Install a CUDA-matched CuPy package, "
+            "for example `pip install matops[cupy-cuda12]`."
+        )
+    return cp
+
+
+def _cupy_device_context(device: Optional[Union[str, int, Any]]):
+    cupy = _require_cupy()
+    if device is None or device == "cuda":
+        return nullcontext()
+    if isinstance(device, str):
+        if not device.startswith("cuda:"):
+            raise ValueError(f"Unsupported CuPy device: {device!r}")
+        device = int(device.split(":", 1)[1])
+    return cupy.cuda.Device(device)
+
 
 class MatOps(BaseModel):
     """Small backend-neutral matrix/tensor operation interface.
 
-    Subclasses implement the same common operations for NumPy arrays and
-    PyTorch tensors. This is intentionally lightweight; it is useful when
+    Subclasses implement the same common operations for NumPy arrays, PyTorch
+    tensors, and CuPy arrays. This is intentionally lightweight; it is useful when
     result payloads may be produced on either backend but downstream code wants
     a consistent operation surface.
     """
@@ -353,9 +383,122 @@ class TorchMatOps(MatOps):
     def flatten(self, x: torch.Tensor) -> torch.Tensor:
         return x.flatten()
 
+
+class CupyMatOps(MatOps):
+    """CuPy implementation of :class:`MatOps`.
+
+    CuPy is optional. Instantiating this class is always safe, but calling an
+    operation requires a CuPy installation compatible with the local CUDA
+    runtime.
+    """
+
+    int32: ClassVar[Any] = None if cp is None else cp.int32
+    uint8: ClassVar[Any] = None if cp is None else cp.uint8
+    float32: ClassVar[Any] = None if cp is None else cp.float32
+    float16: ClassVar[Any] = None if cp is None else cp.float16
+
+    def mat(self, data: Any, dtype: Any, device: Optional[Union[str, int, Any]] = None) -> Any:
+        cupy = _require_cupy()
+        with _cupy_device_context(device):
+            return cupy.array(data, dtype=dtype)
+
+    def eye(self, size: int, dtype: Any, device: Optional[Union[str, int, Any]] = None) -> Any:
+        cupy = _require_cupy()
+        with _cupy_device_context(device):
+            return cupy.eye(size, dtype=dtype)
+
+    def ones(self, shape: Sequence[int], dtype: Any, device: Optional[Union[str, int, Any]] = None) -> Any:
+        cupy = _require_cupy()
+        with _cupy_device_context(device):
+            return cupy.ones(tuple(shape), dtype=dtype)
+
+    def zeros(self, shape: Sequence[int], dtype: Any, device: Optional[Union[str, int, Any]] = None) -> Any:
+        cupy = _require_cupy()
+        with _cupy_device_context(device):
+            return cupy.zeros(tuple(shape), dtype=dtype)
+
+    def hstack(self, arrays: Sequence[Any]) -> Any:
+        return _require_cupy().hstack(tuple(arrays))
+
+    def norm(self, x: Any) -> Any:
+        return _require_cupy().linalg.norm(x)
+
+    def dot(self, a: Any, b: Any) -> Any:
+        return _require_cupy().dot(a, b)
+
+    def cross(self, a: Any, b: Any) -> Any:
+        return _require_cupy().cross(a, b)
+
+    def matmul(self, a: Any, b: Any) -> Any:
+        return _require_cupy().matmul(a, b)
+
+    def to_numpy(self, x: Any) -> np.ndarray:
+        return _require_cupy().asnumpy(x)
+
+    def mean(self, x: Any, dim: int = 0) -> Any:
+        return _require_cupy().mean(x, axis=dim)
+
+    def median(self, x: Any, dim: int = 0) -> Any:
+        return _require_cupy().median(x, axis=dim)
+
+    def std(self, x: Any, dim: int = 0) -> Any:
+        return _require_cupy().std(x, axis=dim, ddof=0)
+
+    def max(self, x: Any, dim: int = 0) -> Any:
+        return _require_cupy().max(x, axis=dim)
+
+    def min(self, x: Any, dim: int = 0) -> Any:
+        return _require_cupy().min(x, axis=dim)
+
+    def abs(self, x: Any) -> Any:
+        return _require_cupy().abs(x)
+
+    def stack(self, xs: Sequence[Any], dim: int = 0) -> Any:
+        return _require_cupy().stack(tuple(xs), axis=dim)
+
+    def cat(self, xs: Sequence[Any], dim: int = 0) -> Any:
+        return _require_cupy().concatenate(tuple(xs), axis=dim)
+
+    def reshape(self, x: Any, shape: Sequence[int]) -> Any:
+        return _require_cupy().reshape(x, tuple(shape))
+
+    def copy_mat(self, x: Any) -> Any:
+        _require_cupy()
+        return x.copy()
+
+    def logical_and(self, a: Any, b: Any) -> Any:
+        return _require_cupy().logical_and(a, b)
+
+    def logical_or(self, a: Any, b: Any) -> Any:
+        return _require_cupy().logical_or(a, b)
+
+    def clip(self, x: Any, min_val: Any, max_val: Any) -> Any:
+        return _require_cupy().clip(x, min_val, max_val)
+
+    def astype_int32(self, x: Any) -> Any:
+        return x.astype(_require_cupy().int32)
+
+    def astype_uint8(self, x: Any) -> Any:
+        return x.astype(_require_cupy().uint8)
+
+    def astype_float32(self, x: Any) -> Any:
+        return x.astype(_require_cupy().float32)
+
+    def astype_float16(self, x: Any) -> Any:
+        return x.astype(_require_cupy().float16)
+
+    def nonzero(self, x: Any) -> Any:
+        return _require_cupy().nonzero(x)
+
+    def flatten(self, x: Any) -> Any:
+        _require_cupy()
+        return x.flatten()
+
+
 class MatLib(str, enum.Enum):
     NUMPY = "numpy"
     TORCH = "torch"
+    CUPY = "cupy"
 
     @staticmethod
     def which(data):
@@ -363,6 +506,8 @@ class MatLib(str, enum.Enum):
             return MatLib.NUMPY
         if isinstance(data, torch.Tensor):
             return MatLib.TORCH
+        if cp is not None and isinstance(data, cp.ndarray):
+            return MatLib.CUPY
         raise ValueError(f"Unsupported data type: {type(data)}")
 
 class MatDevice(str, enum.Enum):
@@ -378,6 +523,8 @@ class MatDevice(str, enum.Enum):
             return MatDevice.CPU
         if isinstance(data, torch.Tensor):
             return MatDevice.CPU if data.device.type == "cpu" else MatDevice.CUDA
+        if cp is not None and isinstance(data, cp.ndarray):
+            return MatDevice.CUDA
         raise ValueError(f"Unsupported data type: {type(data)}")
 
 class DataType(str, enum.Enum):
@@ -392,7 +539,7 @@ class DataType(str, enum.Enum):
 
     @classmethod
     def from_dtype(cls, dtype: Any, *, strict: bool = False) -> "DataType | None":
-        """Return the matching DataType for a NumPy/Torch/Python dtype.
+        """Return the matching DataType for a NumPy/Torch/CuPy/Python dtype.
 
         Returns None for unsupported dtypes unless strict=True.
         """
@@ -436,7 +583,7 @@ class DataType(str, enum.Enum):
 
     @classmethod
     def which(cls, data: Any, *, strict: bool = True) -> "DataType | None":
-        """Infer DataType from an ndarray, tensor, dtype object, enum, or dtype string.
+        """Infer DataType from an array, tensor, dtype object, enum, or dtype string.
 
         Existing calls like DataType.which(data) still work. Unsupported inputs return
         None by default; pass strict=True to raise a TypeError instead.
@@ -447,46 +594,63 @@ class DataType(str, enum.Enum):
         if isinstance(data, torch.Tensor):
             return cls.from_dtype(data.dtype, strict=strict)
 
+        if cp is not None and isinstance(data, cp.ndarray):
+            return cls.from_dtype(data.dtype, strict=strict)
+
         return cls.from_dtype(data, strict=strict)
 
 TypeMap = {
-    "uint8":   (np.uint8,   torch.uint8,   ctypes.c_uint8),
-    "int8":    (np.int8,    torch.int8,    ctypes.c_int8),
-
-    "uint16":  (np.uint16,  getattr(torch, "uint16", None), ctypes.c_uint16),
-    "int16":   (np.int16,   torch.int16,   ctypes.c_int16),
-
-    "uint32":  (np.uint32,  getattr(torch, "uint32", None), ctypes.c_uint32),
-    "int32":   (np.int32,   torch.int32,   ctypes.c_int32),
-
-    "uint64":  (np.uint64,  getattr(torch, "uint64", None), ctypes.c_uint64),
-    "int64":   (np.int64,   torch.int64,   ctypes.c_int64),
-
-    "float32": (np.float32, torch.float32, ctypes.c_float),
-    "float64": (np.float64, torch.float64, ctypes.c_double),
-
-    "bool":    (np.bool_,   torch.bool,    ctypes.c_bool),
+    # Tuple order preserves the original public layout: NumPy, Torch, ctypes, CuPy.
+    "uint8": (np.uint8, torch.uint8, ctypes.c_uint8, None if cp is None else cp.uint8),
+    "int8": (np.int8, torch.int8, ctypes.c_int8, None if cp is None else cp.int8),
+    "uint16": (
+        np.uint16,
+        getattr(torch, "uint16", None),
+        ctypes.c_uint16,
+        None if cp is None else cp.uint16,
+    ),
+    "int16": (np.int16, torch.int16, ctypes.c_int16, None if cp is None else cp.int16),
+    "uint32": (
+        np.uint32,
+        getattr(torch, "uint32", None),
+        ctypes.c_uint32,
+        None if cp is None else cp.uint32,
+    ),
+    "int32": (np.int32, torch.int32, ctypes.c_int32, None if cp is None else cp.int32),
+    "uint64": (
+        np.uint64,
+        getattr(torch, "uint64", None),
+        ctypes.c_uint64,
+        None if cp is None else cp.uint64,
+    ),
+    "int64": (np.int64, torch.int64, ctypes.c_int64, None if cp is None else cp.int64),
+    "float16": (np.float16, torch.float16, None, None if cp is None else cp.float16),
+    "float32": (np.float32, torch.float32, ctypes.c_float, None if cp is None else cp.float32),
+    "float64": (np.float64, torch.float64, ctypes.c_double, None if cp is None else cp.float64),
+    "bool": (np.bool_, torch.bool, ctypes.c_bool, None if cp is None else cp.bool_),
 }
 
 def to_type_name(dtype: Any) -> str:
     """
-    Convert a numpy / torch / ctypes dtype into the canonical string key
+    Convert a NumPy / PyTorch / CuPy / ctypes dtype into the canonical string key
     used by TypeMap.
 
     Examples:
         np.uint8          -> "uint8"
         np.dtype("uint8") -> "uint8"
         torch.uint8       -> "uint8"
+        cupy.uint8        -> "uint8"
         ctypes.c_uint8    -> "uint8"
         "uint8"           -> "uint8"
     """
+    if dtype is None:
+        raise TypeError("dtype cannot be None")
+
     if isinstance(dtype, str):
         if dtype in TypeMap:
             return dtype
         raise KeyError(f"Unknown dtype name: {dtype!r}")
 
-    # Normalize NumPy dtype inputs:
-    # np.uint8, np.dtype("uint8"), "uint8"-like objects, etc.
     try:
         np_dtype = np.dtype(dtype)
     except TypeError:
@@ -496,19 +660,39 @@ def to_type_name(dtype: Any) -> str:
         if np_dtype is not None and np_dtype == info[0]:
             return name
 
-        if dtype is info[1]:
+        if info[1] is not None and dtype is info[1]:
             return name
 
-        if dtype is info[2]:
+        if info[2] is not None and dtype is info[2]:
+            return name
+
+        if info[3] is not None and dtype is info[3]:
             return name
 
     raise TypeError(f"Unsupported dtype: {dtype!r}")
 
+
 def to_np_type(dtype: Any) -> np.dtype:
     return TypeMap[to_type_name(dtype)][0]
 
+
 def to_torch_type(dtype: Any) -> torch.dtype:
-    return TypeMap[to_type_name(dtype)][1]
+    result = TypeMap[to_type_name(dtype)][1]
+    if result is None:
+        raise TypeError(f"No PyTorch dtype mapping for {dtype!r}")
+    return result
+
+
+def to_cupy_type(dtype: Any) -> Any:
+    _require_cupy()
+    result = TypeMap[to_type_name(dtype)][3]
+    if result is None:
+        raise TypeError(f"No CuPy dtype mapping for {dtype!r}")
+    return result
+
 
 def to_ctypes_type(dtype: Any):
-    return TypeMap[to_type_name(dtype)][2]
+    result = TypeMap[to_type_name(dtype)][2]
+    if result is None:
+        raise TypeError(f"No ctypes dtype mapping for {dtype!r}")
+    return result
