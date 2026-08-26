@@ -172,4 +172,4 @@ ruff check .
 This repository intentionally stays small. The goal is a stable, predictable
 adapter for a focused set of operations—not a general tensor framework.
 
-Before publishing publicly, choose and add the license you want for the project.
+MIT
