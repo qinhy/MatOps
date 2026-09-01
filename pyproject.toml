@@ -39,3 +39,9 @@ addopts = "-q"
 
 [tool.ruff]
 line-length = 100
+
+[dependency-groups]
+dev = [
+    "cupy>=14.2.0",
+    "opencv-python>=5.0.0.93",
+]

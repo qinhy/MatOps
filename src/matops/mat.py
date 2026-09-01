@@ -59,6 +59,14 @@ class MatOps(BaseModel):
     def mat(self, data: Any, dtype: Any, device: Optional[Union[str, Any]] = None) -> ArrayLike:
         raise NotImplementedError
 
+    def ndim(self, x: ArrayLike): return x.ndim
+
+    def shape(self, x: ArrayLike): return x.shape
+
+    def sin(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
+
+    def cos(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
+
     def eye(self, size: int, dtype: Any, device: Optional[Union[str, Any]] = None) -> ArrayLike:
         raise NotImplementedError
 
@@ -200,6 +208,10 @@ class NumpyMatOps(MatOps):
     def mat(self, data: Any, dtype: Any, device: Optional[Union[str, Any]] = None) -> np.ndarray:
         return np.array(data, dtype=dtype)
 
+    def sin(self, x): return np.sin(x)
+
+    def cos(self, x): return np.cos(x)
+    
     def eye(self, size: int, dtype: Any, device: Optional[Union[str, Any]] = None) -> np.ndarray:
         return np.eye(size, dtype=dtype)
 
@@ -294,6 +306,10 @@ class TorchMatOps(MatOps):
 
     def mat(self, data: torch.Tensor, dtype: Any, device: Optional[Union[str, Any]] = None) -> torch.Tensor:
         return torch.tensor(data, dtype=dtype, device=device)
+
+    def sin(self, x): return torch.sin(x)
+
+    def cos(self, x): return torch.cos(x)
 
     def eye(self, size: int, dtype: Any, device: Optional[Union[str, Any]] = None) -> torch.Tensor:
         return torch.eye(size, dtype=dtype, device=device)
@@ -402,6 +418,10 @@ class CupyMatOps(MatOps):
         with _cupy_device_context(device):
             return cupy.array(data, dtype=dtype)
 
+    def sin(self, x): return _require_cupy().sin(x)
+
+    def cos(self, x): return _require_cupy().cos(x)
+    
     def eye(self, size: int, dtype: Any, device: Optional[Union[str, int, Any]] = None) -> Any:
         cupy = _require_cupy()
         with _cupy_device_context(device):
