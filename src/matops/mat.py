@@ -170,6 +170,7 @@ class MatOps(BaseModel):
     def dot(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: raise NotImplementedError
     def cross(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: raise NotImplementedError
     def matmul(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: raise NotImplementedError
+    def inv(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def from_numpy(self, x: ArrayLike) -> np.ndarray: raise NotImplementedError
     def to_numpy(self, x: ArrayLike) -> np.ndarray: raise NotImplementedError
     def mean(self, x: ArrayLike, dim: int = 0) -> ArrayLike: raise NotImplementedError
@@ -268,6 +269,7 @@ class NumpyMatOps(MatOps):
     def dot(self, a: np.ndarray, b: np.ndarray) -> np.ndarray: return np.dot(a, b)
     def cross(self, a: np.ndarray, b: np.ndarray) -> np.ndarray: return np.cross(a, b)
     def matmul(self, a: np.ndarray, b: np.ndarray) -> np.ndarray: return a @ b
+    def inv(self, x: np.ndarray) -> np.ndarray: return np.linalg.inv(x)
     def from_numpy(self, x: np.ndarray) -> np.ndarray: return np.asarray(x)
     def to_numpy(self, x: np.ndarray) -> np.ndarray: return np.asarray(x)
     def mean(self, x: np.ndarray, dim: int = 0) -> np.ndarray: return np.mean(x, axis=dim)
@@ -320,6 +322,7 @@ class TorchMatOps(MatOps):
     def dot(self, a: tTensor, b: Any) -> tTensor: return torch.dot(a, b)
     def cross(self, a: tTensor, b: Any) -> tTensor: return torch.cross(a, b)
     def matmul(self, a: tTensor, b: Any) -> tTensor: return torch.matmul(a, b)
+    def inv(self, x: tTensor) -> tTensor: return torch.linalg.inv(x)
     def mean(self, x: tTensor, dim: int = 0) -> tTensor: return torch.mean(x, dim=dim)
     def median(self, x: tTensor, dim: int = 0) -> tTensor: return torch.median(x, dim=dim).values
     def std(self, x: tTensor, dim: int = 0) -> tTensor: return torch.std(x, dim=dim, unbiased=False)
@@ -408,6 +411,7 @@ class CupyMatOps(MatOps):
     def dot(self, a: Any, b: Any) -> Any: return _imp_cp().dot(a, b)
     def cross(self, a: Any, b: Any) -> Any: return _imp_cp().cross(a, b)
     def matmul(self, a: Any, b: Any) -> Any: return _imp_cp().matmul(a, b)
+    def inv(self, x: Any) -> Any: return _imp_cp().linalg.inv(x)
 
     def from_numpy(self, data: np.ndarray) -> Any:
         with self._context(): return _imp_cp().asarray(data)
