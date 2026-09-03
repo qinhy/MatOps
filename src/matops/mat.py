@@ -171,6 +171,7 @@ class MatOps(BaseModel):
     def cross(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: raise NotImplementedError
     def matmul(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: raise NotImplementedError
     def inv(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
+    def no_grad(self): return nullcontext()
     def from_numpy(self, x: ArrayLike) -> np.ndarray: raise NotImplementedError
     def to_numpy(self, x: ArrayLike) -> np.ndarray: raise NotImplementedError
     def mean(self, x: ArrayLike, dim: int = 0) -> ArrayLike: raise NotImplementedError
@@ -195,7 +196,7 @@ class MatOps(BaseModel):
     def astype_uint8(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def astype_float32(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def astype_float16(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
-    def nonzero(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError   
+    def nonzero(self, x: ArrayLike) -> tuple[ArrayLike, ...]: raise NotImplementedError
     def flatten(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def reinterpret(self, x: ArrayLike, dtype: Any) -> ArrayLike: raise NotImplementedError
 
@@ -323,6 +324,7 @@ class TorchMatOps(MatOps):
     def cross(self, a: tTensor, b: Any) -> tTensor: return torch.cross(a, b)
     def matmul(self, a: tTensor, b: Any) -> tTensor: return torch.matmul(a, b)
     def inv(self, x: tTensor) -> tTensor: return torch.linalg.inv(x)
+    def no_grad(self): return torch.no_grad()
     def mean(self, x: tTensor, dim: int = 0) -> tTensor: return torch.mean(x, dim=dim)
     def median(self, x: tTensor, dim: int = 0) -> tTensor: return torch.median(x, dim=dim).values
     def std(self, x: tTensor, dim: int = 0) -> tTensor: return torch.std(x, dim=dim, unbiased=False)
@@ -360,7 +362,7 @@ class TorchMatOps(MatOps):
     def astype_uint8(self, x: tTensor) -> tTensor: return x.to(dtype=torch.uint8)
     def astype_float32(self, x: tTensor) -> tTensor: return x.to(dtype=torch.float32)
     def astype_float16(self, x: tTensor) -> tTensor: return x.to(dtype=torch.float16)
-    def nonzero(self, x: tTensor) -> tTensor: return torch.nonzero(x)
+    def nonzero(self, x: tTensor) -> tuple[tTensor, ...]: return torch.nonzero(x, as_tuple=True)
     def flatten(self, x: tTensor) -> tTensor: return x.flatten()
     def reinterpret(self, x: tTensor, dtype: Any) -> tTensor: return x.view(dtype)
     def from_numpy(self, data: np.ndarray) -> tTensor: return torch.from_numpy(data).to(device=self.device)    
@@ -439,7 +441,7 @@ class CupyMatOps(MatOps):
     def astype_uint8(self, x: Any) -> Any: return x.astype(_imp_cp().uint8)
     def astype_float32(self, x: Any) -> Any: return x.astype(_imp_cp().float32)
     def astype_float16(self, x: Any) -> Any: return x.astype(_imp_cp().float16)
-    def nonzero(self, x: Any) -> Any: return _imp_cp().nonzero(x)
+    def nonzero(self, x: Any) -> tuple[Any, ...]: return _imp_cp().nonzero(x)
     def flatten(self, x: Any) -> Any: return x.flatten()
     def reinterpret(self, x: Any, dtype: Any) -> Any: return x.view(dtype)
 
