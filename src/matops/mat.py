@@ -313,13 +313,8 @@ class TorchMatOps(MatOps):
     def astype_float16(self, x: tTensor) -> tTensor: return x.to(dtype=torch.float16)
     def nonzero(self, x: tTensor) -> tTensor: return torch.nonzero(x)
     def flatten(self, x: tTensor) -> tTensor: return x.flatten()
-
-    def from_numpy(self, data: np.ndarray) -> tTensor: return torch.from_numpy(data).to(device=self.device)
-    
-    def to_numpy(self, x: tTensor) -> np.ndarray:
-        if hasattr(x, "detach"): x = x.detach()
-        if hasattr(x, "cpu"): x = x.cpu()
-        return x.numpy() if hasattr(x, "numpy") else np.asarray(x)
+    def from_numpy(self, data: np.ndarray) -> tTensor: return torch.from_numpy(data).to(device=self.device)    
+    def to_numpy(self, x: tTensor) -> np.ndarray: return x.detach().cpu().numpy()
 
 
 class CupyMatOps(MatOps):
