@@ -178,6 +178,8 @@ class MatOps(BaseModel):
     def max(self, x: ArrayLike, dim: Optional[int] = 0) -> ArrayLike: raise NotImplementedError
     def min(self, x: ArrayLike, dim: Optional[int] = 0) -> ArrayLike: raise NotImplementedError
     def nanmax(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
+    def all(self, x: ArrayLike, dim: Optional[int] = None) -> ArrayLike: raise NotImplementedError
+    def isfinite(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def abs(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def round(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def flip(self, x: ArrayLike, dim: int) -> ArrayLike: raise NotImplementedError
@@ -194,6 +196,7 @@ class MatOps(BaseModel):
     def astype_float16(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def nonzero(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError   
     def flatten(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
+    def reinterpret(self, x: ArrayLike, dtype: Any) -> ArrayLike: raise NotImplementedError
 
     @staticmethod
     def from_xyxy_to_xywh(data):
@@ -273,6 +276,8 @@ class NumpyMatOps(MatOps):
     def max(self, x: np.ndarray, dim: Optional[int] = 0) -> np.ndarray: return np.max(x, axis=dim)
     def min(self, x: np.ndarray, dim: Optional[int] = 0) -> np.ndarray: return np.min(x, axis=dim)
     def nanmax(self, x: np.ndarray) -> np.ndarray: return np.nanmax(x)
+    def all(self, x: np.ndarray, dim: Optional[int] = None) -> np.ndarray: return np.all(x, axis=dim)
+    def isfinite(self, x: np.ndarray) -> np.ndarray: return np.isfinite(x)
     def abs(self, x: np.ndarray) -> np.ndarray: return np.abs(x)
     def round(self, x: np.ndarray) -> np.ndarray: return np.rint(x)
     def flip(self, x: np.ndarray, dim: int) -> np.ndarray: return np.flip(x, axis=dim)
@@ -289,6 +294,7 @@ class NumpyMatOps(MatOps):
     def astype_float16(self, x: np.ndarray) -> np.ndarray: return x.astype(np.float16)
     def nonzero(self, x: np.ndarray) -> tuple[np.ndarray, ...]: return np.nonzero(x)
     def flatten(self, x: np.ndarray) -> np.ndarray: return x.flatten()
+    def reinterpret(self, x: np.ndarray, dtype: Any) -> np.ndarray: return x.view(dtype)
 
 
 class TorchMatOps(MatOps):
@@ -333,6 +339,10 @@ class TorchMatOps(MatOps):
             return x.new_tensor(float("nan"))
         return torch.max(x[valid])
 
+    def all(self, x: tTensor, dim: Optional[int] = None) -> tTensor:
+        return torch.all(x) if dim is None else torch.all(x, dim=dim)
+
+    def isfinite(self, x: tTensor) -> tTensor: return torch.isfinite(x)
     def abs(self, x: tTensor) -> tTensor: return torch.abs(x)
     def round(self, x: tTensor) -> tTensor: return torch.round(x)
     def flip(self, x: tTensor, dim: int) -> tTensor: return torch.flip(x, dims=(dim,))
@@ -349,6 +359,7 @@ class TorchMatOps(MatOps):
     def astype_float16(self, x: tTensor) -> tTensor: return x.to(dtype=torch.float16)
     def nonzero(self, x: tTensor) -> tTensor: return torch.nonzero(x)
     def flatten(self, x: tTensor) -> tTensor: return x.flatten()
+    def reinterpret(self, x: tTensor, dtype: Any) -> tTensor: return x.view(dtype)
     def from_numpy(self, data: np.ndarray) -> tTensor: return torch.from_numpy(data).to(device=self.device)    
     def to_numpy(self, x: tTensor) -> np.ndarray: return x.detach().cpu().numpy()
 
@@ -408,6 +419,8 @@ class CupyMatOps(MatOps):
     def max(self, x: Any, dim: Optional[int] = 0) -> Any: return _imp_cp().max(x, axis=dim)
     def min(self, x: Any, dim: Optional[int] = 0) -> Any: return _imp_cp().min(x, axis=dim)
     def nanmax(self, x: Any) -> Any: return _imp_cp().nanmax(x)
+    def all(self, x: Any, dim: Optional[int] = None) -> Any: return _imp_cp().all(x, axis=dim)
+    def isfinite(self, x: Any) -> Any: return _imp_cp().isfinite(x)
     def abs(self, x: Any) -> Any: return _imp_cp().abs(x)
     def round(self, x: Any) -> Any: return _imp_cp().rint(x)
     def flip(self, x: Any, dim: int) -> Any: return _imp_cp().flip(x, axis=dim)
@@ -424,6 +437,7 @@ class CupyMatOps(MatOps):
     def astype_float16(self, x: Any) -> Any: return x.astype(_imp_cp().float16)
     def nonzero(self, x: Any) -> Any: return _imp_cp().nonzero(x)
     def flatten(self, x: Any) -> Any: return x.flatten()
+    def reinterpret(self, x: Any, dtype: Any) -> Any: return x.view(dtype)
 
 
 class MatLib(str, enum.Enum):
