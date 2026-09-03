@@ -67,6 +67,7 @@ class DataType(str, enum.Enum):
     FLOAT16 = "float16"
     BFLOAT16 = "bfloat16"
     UINT8 = "uint8"
+    UINT16 = "uint16"
     INT32 = "int32"
     INT64 = "int64"
     UNKNOWN = "UNKNOWN"
@@ -92,6 +93,7 @@ class DataType(str, enum.Enum):
                 np.dtype(np.float32): cls.FLOAT32,
                 np.dtype(np.float16): cls.FLOAT16,
                 np.dtype(np.uint8): cls.UINT8,
+                np.dtype(np.uint16): cls.UINT16,
                 np.dtype(np.int32): cls.INT32,
                 np.dtype(np.int64): cls.INT64,
             }.get(np_dtype)
@@ -105,6 +107,7 @@ class DataType(str, enum.Enum):
             torch.float16: cls.FLOAT16,
             torch.bfloat16: cls.BFLOAT16,
             torch.uint8: cls.UINT8,
+            **({torch.uint16: cls.UINT16} if hasattr(torch, "uint16") else {}),
             torch.int32: cls.INT32,
             torch.int64: cls.INT64,
         }.get(dtype)
@@ -142,6 +145,7 @@ class MatOps(BaseModel):
 
     int32: ClassVar[Any] = None
     uint8: ClassVar[Any] = None
+    uint16: ClassVar[Any] = None
     float64: ClassVar[Any] = None
     float32: ClassVar[Any] = None
     float16: ClassVar[Any] = None
@@ -153,6 +157,9 @@ class MatOps(BaseModel):
     def mat(self, data: Any, dtype: Any) -> ArrayLike: raise NotImplementedError
     def ndim(self, x: ArrayLike): return x.ndim
     def shape(self, x: ArrayLike): return x.shape
+    def dtype(self, x: ArrayLike): return x.dtype
+    def numel(self, x: ArrayLike) -> int: raise NotImplementedError
+    def is_floating_point(self, x: ArrayLike) -> bool: raise NotImplementedError
     def sin(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def cos(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def eye(self, size: int, dtype: Any) -> ArrayLike: raise NotImplementedError
@@ -168,9 +175,12 @@ class MatOps(BaseModel):
     def mean(self, x: ArrayLike, dim: int = 0) -> ArrayLike: raise NotImplementedError
     def median(self, x: ArrayLike, dim: int = 0) -> ArrayLike: raise NotImplementedError
     def std(self, x: ArrayLike, dim: int = 0) -> ArrayLike: raise NotImplementedError
-    def max(self, x: ArrayLike, dim: int = 0) -> ArrayLike: raise NotImplementedError
-    def min(self, x: ArrayLike, dim: int = 0) -> ArrayLike: raise NotImplementedError
+    def max(self, x: ArrayLike, dim: Optional[int] = 0) -> ArrayLike: raise NotImplementedError
+    def min(self, x: ArrayLike, dim: Optional[int] = 0) -> ArrayLike: raise NotImplementedError
+    def nanmax(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def abs(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
+    def round(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
+    def flip(self, x: ArrayLike, dim: int) -> ArrayLike: raise NotImplementedError
     def stack(self, xs: Sequence[ArrayLike], dim: int = 0) -> ArrayLike: raise NotImplementedError
     def cat(self, xs: Sequence[ArrayLike], dim: int = 0) -> ArrayLike: raise NotImplementedError
     def reshape(self, x: ArrayLike, shape: Sequence[int]) -> ArrayLike: raise NotImplementedError
@@ -236,11 +246,15 @@ class NumpyMatOps(MatOps):
     """NumPy implementation of :class:`MatOps`."""
     int32: ClassVar[Any] = np.int32
     uint8: ClassVar[Any] = np.uint8
+    uint16: ClassVar[Any] = np.uint16
+    float64: ClassVar[Any] = np.float64
     float32: ClassVar[Any] = np.float32
     float16: ClassVar[Any] = np.float16
     device: MatDevice = MatDevice.CPU
 
     def mat(self, data: Any, dtype: Any) -> np.ndarray: return np.array(data, dtype=dtype)
+    def numel(self, x: np.ndarray) -> int: return x.size
+    def is_floating_point(self, x: np.ndarray) -> bool: return np.issubdtype(x.dtype, np.floating)
     def sin(self, x): return np.sin(x)
     def cos(self, x): return np.cos(x)
     def eye(self, size: int, dtype: Any) -> np.ndarray: return np.eye(size, dtype=dtype)
@@ -256,9 +270,12 @@ class NumpyMatOps(MatOps):
     def mean(self, x: np.ndarray, dim: int = 0) -> np.ndarray: return np.mean(x, axis=dim)
     def median(self, x: np.ndarray, dim: int = 0) -> np.ndarray: return np.median(x, axis=dim)
     def std(self, x: np.ndarray, dim: int = 0) -> np.ndarray: return np.std(x, axis=dim)
-    def max(self, x: np.ndarray, dim: int = 0) -> np.ndarray: return np.max(x, axis=dim)
-    def min(self, x: np.ndarray, dim: int = 0) -> np.ndarray: return np.min(x, axis=dim)
+    def max(self, x: np.ndarray, dim: Optional[int] = 0) -> np.ndarray: return np.max(x, axis=dim)
+    def min(self, x: np.ndarray, dim: Optional[int] = 0) -> np.ndarray: return np.min(x, axis=dim)
+    def nanmax(self, x: np.ndarray) -> np.ndarray: return np.nanmax(x)
     def abs(self, x: np.ndarray) -> np.ndarray: return np.abs(x)
+    def round(self, x: np.ndarray) -> np.ndarray: return np.rint(x)
+    def flip(self, x: np.ndarray, dim: int) -> np.ndarray: return np.flip(x, axis=dim)
     def stack(self, xs: Sequence[np.ndarray], dim: int = 0) -> np.ndarray: return np.stack(xs, axis=dim)
     def cat(self, xs: Sequence[np.ndarray], dim: int = 0) -> np.ndarray: return np.concatenate(xs, axis=dim)
     def reshape(self, x: np.ndarray, shape: Sequence[int]) -> np.ndarray: return np.reshape(x, shape)
@@ -278,12 +295,15 @@ class TorchMatOps(MatOps):
     """PyTorch implementation of :class:`MatOps`."""
     int32: ClassVar[Any] = None if torch is None else torch.int32
     uint8: ClassVar[Any] = None if torch is None else torch.uint8
+    uint16: ClassVar[Any] = getattr(torch, "uint16", None)
     float64: ClassVar[Any] = None if torch is None else torch.float64
     float32: ClassVar[Any] = None if torch is None else torch.float32
     float16: ClassVar[Any] = None if torch is None else torch.float16
     device: MatDevice = MatDevice.CPU # MatDevice.CUDA0
 
     def mat(self, data: tTensor, dtype: Any) -> tTensor: return torch.tensor(data, dtype=dtype, device=self.device)
+    def numel(self, x: tTensor) -> int: return x.numel()
+    def is_floating_point(self, x: tTensor) -> bool: return x.is_floating_point()
     def sin(self, x): return torch.sin(x)
     def cos(self, x): return torch.cos(x)
     def eye(self, size: int, dtype: Any) -> tTensor: return torch.eye(size, dtype=dtype, device=self.device)
@@ -297,9 +317,25 @@ class TorchMatOps(MatOps):
     def mean(self, x: tTensor, dim: int = 0) -> tTensor: return torch.mean(x, dim=dim)
     def median(self, x: tTensor, dim: int = 0) -> tTensor: return torch.median(x, dim=dim).values
     def std(self, x: tTensor, dim: int = 0) -> tTensor: return torch.std(x, dim=dim, unbiased=False)
-    def max(self, x: tTensor, dim: int = 0) -> tTensor: return torch.max(x, dim=dim).values
-    def min(self, x: tTensor, dim: int = 0) -> tTensor: return torch.min(x, dim=dim).values
+    def max(self, x: tTensor, dim: Optional[int] = 0) -> tTensor:
+        return torch.max(x) if dim is None else torch.max(x, dim=dim).values
+
+    def min(self, x: tTensor, dim: Optional[int] = 0) -> tTensor:
+        return torch.min(x) if dim is None else torch.min(x, dim=dim).values
+
+    def nanmax(self, x: tTensor) -> tTensor:
+        if not x.is_floating_point():
+            return torch.max(x)
+        if x.numel() == 0:
+            return torch.max(x)  # Preserve reduction failure on empty tensors.
+        valid = ~torch.isnan(x)
+        if not torch.any(valid):
+            return x.new_tensor(float("nan"))
+        return torch.max(x[valid])
+
     def abs(self, x: tTensor) -> tTensor: return torch.abs(x)
+    def round(self, x: tTensor) -> tTensor: return torch.round(x)
+    def flip(self, x: tTensor, dim: int) -> tTensor: return torch.flip(x, dims=(dim,))
     def stack(self, xs: Sequence[Any], dim: int = 0) -> tTensor: return torch.stack(tuple(xs), dim=dim)
     def cat(self, xs: Sequence[Any], dim: int = 0) -> tTensor: return torch.cat(tuple(xs), dim=dim)
     def reshape(self, x: tTensor, shape: Sequence[int]) -> tTensor: return x.reshape(tuple(shape))
@@ -327,20 +363,23 @@ class CupyMatOps(MatOps):
 
     int32: ClassVar[Any] = None if cp is None else cp.int32
     uint8: ClassVar[Any] = None if cp is None else cp.uint8
+    uint16: ClassVar[Any] = None if cp is None else cp.uint16
     float64: ClassVar[Any] = None if cp is None else cp.float64
     float32: ClassVar[Any] = None if cp is None else cp.float32
     float16: ClassVar[Any] = None if cp is None else cp.float16
     device: MatDevice = MatDevice.CUDA # MatDevice.CUDA0
 
     def __init__(self, *args, **kwds):
-        _imp_cp()
         super().__init__(*args, **kwds)
+
     def _context(self):
         return _cupy_device_context(self.device)
 
     def mat(self, data: Any, dtype: Any) -> Any:
         with self._context(): return _imp_cp().array(data, dtype=dtype)
 
+    def numel(self, x: Any) -> int: return x.size
+    def is_floating_point(self, x: Any) -> bool: return _imp_cp().issubdtype(x.dtype, _imp_cp().floating)
     def sin(self, x): return _imp_cp().sin(x)
     def cos(self, x): return _imp_cp().cos(x)
     
@@ -366,9 +405,12 @@ class CupyMatOps(MatOps):
     def mean(self, x: Any, dim: int = 0) -> Any: return _imp_cp().mean(x, axis=dim)
     def median(self, x: Any, dim: int = 0) -> Any: return _imp_cp().median(x, axis=dim)
     def std(self, x: Any, dim: int = 0) -> Any: return _imp_cp().std(x, axis=dim, ddof=0)
-    def max(self, x: Any, dim: int = 0) -> Any: return _imp_cp().max(x, axis=dim)
-    def min(self, x: Any, dim: int = 0) -> Any: return _imp_cp().min(x, axis=dim)
+    def max(self, x: Any, dim: Optional[int] = 0) -> Any: return _imp_cp().max(x, axis=dim)
+    def min(self, x: Any, dim: Optional[int] = 0) -> Any: return _imp_cp().min(x, axis=dim)
+    def nanmax(self, x: Any) -> Any: return _imp_cp().nanmax(x)
     def abs(self, x: Any) -> Any: return _imp_cp().abs(x)
+    def round(self, x: Any) -> Any: return _imp_cp().rint(x)
+    def flip(self, x: Any, dim: int) -> Any: return _imp_cp().flip(x, axis=dim)
     def stack(self, xs: Sequence[Any], dim: int = 0) -> Any: return _imp_cp().stack(tuple(xs), axis=dim)
     def cat(self, xs: Sequence[Any], dim: int = 0) -> Any: return _imp_cp().concatenate(tuple(xs), axis=dim)
     def reshape(self, x: Any, shape: Sequence[int]) -> Any: return _imp_cp().reshape(x, tuple(shape))
