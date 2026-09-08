@@ -144,6 +144,7 @@ class MatOps(BaseModel):
     """
 
     int32: ClassVar[Any] = None
+    int64: ClassVar[Any] = None
     uint8: ClassVar[Any] = None
     uint16: ClassVar[Any] = None
     float64: ClassVar[Any] = None
@@ -172,7 +173,7 @@ class MatOps(BaseModel):
     def matmul(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: raise NotImplementedError
     def inv(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def no_grad(self): return nullcontext()
-    def from_numpy(self, x: ArrayLike) -> np.ndarray: raise NotImplementedError
+    def from_numpy(self, x: np.ndarray) -> ArrayLike: raise NotImplementedError
     def to_numpy(self, x: ArrayLike) -> np.ndarray: raise NotImplementedError
     def mean(self, x: ArrayLike, dim: int = 0) -> ArrayLike: raise NotImplementedError
     def median(self, x: ArrayLike, dim: int = 0) -> ArrayLike: raise NotImplementedError
@@ -183,16 +184,23 @@ class MatOps(BaseModel):
     def all(self, x: ArrayLike, dim: Optional[int] = None) -> ArrayLike: raise NotImplementedError
     def isfinite(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def abs(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
+    def floor(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def round(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
+    def where(self, condition: ArrayLike, x: Any, y: Any) -> ArrayLike: raise NotImplementedError
     def flip(self, x: ArrayLike, dim: int) -> ArrayLike: raise NotImplementedError
     def stack(self, xs: Sequence[ArrayLike], dim: int = 0) -> ArrayLike: raise NotImplementedError
     def cat(self, xs: Sequence[ArrayLike], dim: int = 0) -> ArrayLike: raise NotImplementedError
     def reshape(self, x: ArrayLike, shape: Sequence[int]) -> ArrayLike: raise NotImplementedError
+    def permute(self, x: ArrayLike, dims: Sequence[int]) -> ArrayLike: raise NotImplementedError
     def copy_mat(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
+    def copyto(self, dst: ArrayLike, src: ArrayLike) -> ArrayLike: raise NotImplementedError
+    def scatter_min(self, dst: ArrayLike, index: ArrayLike, src: ArrayLike) -> ArrayLike: raise NotImplementedError
     def logical_and(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: raise NotImplementedError
     def logical_or(self, a: ArrayLike, b: ArrayLike) -> ArrayLike: raise NotImplementedError
     def clip(self, x: ArrayLike, min_val: Any, max_val: Any) -> ArrayLike: raise NotImplementedError
+    def astype(self, x: ArrayLike, dtype: Any) -> ArrayLike: raise NotImplementedError
     def astype_int32(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
+    def astype_int64(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def astype_uint8(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def astype_float32(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def astype_float16(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
@@ -250,6 +258,7 @@ class MatOps(BaseModel):
 class NumpyMatOps(MatOps):
     """NumPy implementation of :class:`MatOps`."""
     int32: ClassVar[Any] = np.int32
+    int64: ClassVar[Any] = np.int64
     uint8: ClassVar[Any] = np.uint8
     uint16: ClassVar[Any] = np.uint16
     float64: ClassVar[Any] = np.float64
@@ -282,16 +291,27 @@ class NumpyMatOps(MatOps):
     def all(self, x: np.ndarray, dim: Optional[int] = None) -> np.ndarray: return np.all(x, axis=dim)
     def isfinite(self, x: np.ndarray) -> np.ndarray: return np.isfinite(x)
     def abs(self, x: np.ndarray) -> np.ndarray: return np.abs(x)
+    def floor(self, x: np.ndarray) -> np.ndarray: return np.floor(x)
     def round(self, x: np.ndarray) -> np.ndarray: return np.rint(x)
+    def where(self, condition: np.ndarray, x: Any, y: Any) -> np.ndarray: return np.where(condition, x, y)
     def flip(self, x: np.ndarray, dim: int) -> np.ndarray: return np.flip(x, axis=dim)
     def stack(self, xs: Sequence[np.ndarray], dim: int = 0) -> np.ndarray: return np.stack(xs, axis=dim)
     def cat(self, xs: Sequence[np.ndarray], dim: int = 0) -> np.ndarray: return np.concatenate(xs, axis=dim)
     def reshape(self, x: np.ndarray, shape: Sequence[int]) -> np.ndarray: return np.reshape(x, shape)
+    def permute(self, x: np.ndarray, dims: Sequence[int]) -> np.ndarray: return np.transpose(x, axes=tuple(dims))
     def copy_mat(self, x: np.ndarray) -> np.ndarray: return x.copy()
+    def copyto(self, dst: np.ndarray, src: np.ndarray) -> np.ndarray:
+        np.copyto(dst, src)
+        return dst
+    def scatter_min(self, dst: np.ndarray, index: np.ndarray, src: np.ndarray) -> np.ndarray:
+        np.minimum.at(dst, index, src)
+        return dst
     def logical_and(self, a: np.ndarray, b: np.ndarray) -> np.ndarray: return np.logical_and(a, b)
     def logical_or(self, a: np.ndarray, b: np.ndarray) -> np.ndarray: return np.logical_or(a, b)
     def clip(self, x: np.ndarray, min_val: Any, max_val: Any) -> np.ndarray: return np.clip(x, min_val, max_val)
+    def astype(self, x: np.ndarray, dtype: Any) -> np.ndarray: return x.astype(dtype, copy=False)
     def astype_int32(self, x: np.ndarray) -> np.ndarray: return x.astype(np.int32)
+    def astype_int64(self, x: np.ndarray) -> np.ndarray: return x.astype(np.int64)
     def astype_uint8(self, x: np.ndarray) -> np.ndarray: return x.astype(np.uint8)
     def astype_float32(self, x: np.ndarray) -> np.ndarray: return x.astype(np.float32)
     def astype_float16(self, x: np.ndarray) -> np.ndarray: return x.astype(np.float16)
@@ -303,6 +323,7 @@ class NumpyMatOps(MatOps):
 class TorchMatOps(MatOps):
     """PyTorch implementation of :class:`MatOps`."""
     int32: ClassVar[Any] = None if torch is None else torch.int32
+    int64: ClassVar[Any] = None if torch is None else torch.int64
     uint8: ClassVar[Any] = None if torch is None else torch.uint8
     uint16: ClassVar[Any] = getattr(torch, "uint16", None)
     float64: ClassVar[Any] = None if torch is None else torch.float64
@@ -349,16 +370,27 @@ class TorchMatOps(MatOps):
 
     def isfinite(self, x: tTensor) -> tTensor: return torch.isfinite(x)
     def abs(self, x: tTensor) -> tTensor: return torch.abs(x)
+    def floor(self, x: tTensor) -> tTensor: return torch.floor(x)
     def round(self, x: tTensor) -> tTensor: return torch.round(x)
+    def where(self, condition: tTensor, x: Any, y: Any) -> tTensor: return torch.where(condition, x, y)
     def flip(self, x: tTensor, dim: int) -> tTensor: return torch.flip(x, dims=(dim,))
     def stack(self, xs: Sequence[Any], dim: int = 0) -> tTensor: return torch.stack(tuple(xs), dim=dim)
     def cat(self, xs: Sequence[Any], dim: int = 0) -> tTensor: return torch.cat(tuple(xs), dim=dim)
     def reshape(self, x: tTensor, shape: Sequence[int]) -> tTensor: return x.reshape(tuple(shape))
+    def permute(self, x: tTensor, dims: Sequence[int]) -> tTensor: return x.permute(*dims)
     def copy_mat(self, x: tTensor) -> tTensor: return x.clone()
+    def copyto(self, dst: tTensor, src: tTensor) -> tTensor:
+        dst.copy_(src)
+        return dst
+    def scatter_min(self, dst: tTensor, index: tTensor, src: tTensor) -> tTensor:
+        dst.scatter_reduce_(0, index, src, reduce="amin", include_self=True)
+        return dst
     def logical_and(self, a: tTensor, b: Any) -> tTensor: return torch.logical_and(a, b)
     def logical_or(self, a: tTensor, b: Any) -> tTensor: return torch.logical_or(a, b)
     def clip(self, x: tTensor, min_val: Any, max_val: Any) -> tTensor: return torch.clamp(x, min=min_val, max=max_val)
+    def astype(self, x: tTensor, dtype: Any) -> tTensor: return x.to(dtype=dtype)
     def astype_int32(self, x: tTensor) -> tTensor: return x.to(dtype=torch.int32)
+    def astype_int64(self, x: tTensor) -> tTensor: return x.to(dtype=torch.int64)
     def astype_uint8(self, x: tTensor) -> tTensor: return x.to(dtype=torch.uint8)
     def astype_float32(self, x: tTensor) -> tTensor: return x.to(dtype=torch.float32)
     def astype_float16(self, x: tTensor) -> tTensor: return x.to(dtype=torch.float16)
@@ -378,6 +410,7 @@ class CupyMatOps(MatOps):
     """
 
     int32: ClassVar[Any] = None if cp is None else cp.int32
+    int64: ClassVar[Any] = None if cp is None else cp.int64
     uint8: ClassVar[Any] = None if cp is None else cp.uint8
     uint16: ClassVar[Any] = None if cp is None else cp.uint16
     float64: ClassVar[Any] = None if cp is None else cp.float64
@@ -428,16 +461,27 @@ class CupyMatOps(MatOps):
     def all(self, x: Any, dim: Optional[int] = None) -> Any: return _imp_cp().all(x, axis=dim)
     def isfinite(self, x: Any) -> Any: return _imp_cp().isfinite(x)
     def abs(self, x: Any) -> Any: return _imp_cp().abs(x)
+    def floor(self, x: Any) -> Any: return _imp_cp().floor(x)
     def round(self, x: Any) -> Any: return _imp_cp().rint(x)
+    def where(self, condition: Any, x: Any, y: Any) -> Any: return _imp_cp().where(condition, x, y)
     def flip(self, x: Any, dim: int) -> Any: return _imp_cp().flip(x, axis=dim)
     def stack(self, xs: Sequence[Any], dim: int = 0) -> Any: return _imp_cp().stack(tuple(xs), axis=dim)
     def cat(self, xs: Sequence[Any], dim: int = 0) -> Any: return _imp_cp().concatenate(tuple(xs), axis=dim)
     def reshape(self, x: Any, shape: Sequence[int]) -> Any: return _imp_cp().reshape(x, tuple(shape))
+    def permute(self, x: Any, dims: Sequence[int]) -> Any: return _imp_cp().transpose(x, axes=tuple(dims))
     def copy_mat(self, x: Any) -> Any: return x.copy()
+    def copyto(self, dst: Any, src: Any) -> Any:
+        _imp_cp().copyto(dst, src)
+        return dst
+    def scatter_min(self, dst: Any, index: Any, src: Any) -> Any:
+        _imp_cp().minimum.at(dst, index, src)
+        return dst
     def logical_and(self, a: Any, b: Any) -> Any: return _imp_cp().logical_and(a, b)
     def logical_or(self, a: Any, b: Any) -> Any: return _imp_cp().logical_or(a, b)
     def clip(self, x: Any, min_val: Any, max_val: Any) -> Any: return _imp_cp().clip(x, min_val, max_val)
+    def astype(self, x: Any, dtype: Any) -> Any: return x.astype(dtype, copy=False)
     def astype_int32(self, x: Any) -> Any: return x.astype(_imp_cp().int32)
+    def astype_int64(self, x: Any) -> Any: return x.astype(_imp_cp().int64)
     def astype_uint8(self, x: Any) -> Any: return x.astype(_imp_cp().uint8)
     def astype_float32(self, x: Any) -> Any: return x.astype(_imp_cp().float32)
     def astype_float16(self, x: Any) -> Any: return x.astype(_imp_cp().float16)
