@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC
 import ctypes
 import enum
 from contextlib import nullcontext
@@ -11,15 +12,15 @@ from pydantic import BaseModel, ConfigDict
 import torch
 from torch import Tensor as tTensor
 
+class ArrayLike(ABC): pass
+ArrayLike.register(np.ndarray)
+ArrayLike.register(tTensor)
 try:
     import cupy as cp
+    ArrayLike.register(cp.ndarray)
 except ImportError:  # CuPy is an optional, CUDA-specific dependency.
     cp = None
 
-if cp is not None:
-    ArrayLike = Union[np.ndarray, tTensor, cp.ndarray]
-else:
-    ArrayLike = Union[np.ndarray, tTensor]
 
 @lru_cache(maxsize=None)
 def _imp_cp():
@@ -202,6 +203,7 @@ class MatOps(BaseModel):
     def astype_int32(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def astype_int64(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def astype_uint8(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
+    def astype_float64(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def astype_float32(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def astype_float16(self, x: ArrayLike) -> ArrayLike: raise NotImplementedError
     def nonzero(self, x: ArrayLike) -> tuple[ArrayLike, ...]: raise NotImplementedError
@@ -313,6 +315,7 @@ class NumpyMatOps(MatOps):
     def astype_int32(self, x: np.ndarray) -> np.ndarray: return x.astype(np.int32)
     def astype_int64(self, x: np.ndarray) -> np.ndarray: return x.astype(np.int64)
     def astype_uint8(self, x: np.ndarray) -> np.ndarray: return x.astype(np.uint8)
+    def astype_float64(self, x: np.ndarray) -> np.ndarray: return x.astype(np.float64)
     def astype_float32(self, x: np.ndarray) -> np.ndarray: return x.astype(np.float32)
     def astype_float16(self, x: np.ndarray) -> np.ndarray: return x.astype(np.float16)
     def nonzero(self, x: np.ndarray) -> tuple[np.ndarray, ...]: return np.nonzero(x)
@@ -392,6 +395,7 @@ class TorchMatOps(MatOps):
     def astype_int32(self, x: tTensor) -> tTensor: return x.to(dtype=torch.int32)
     def astype_int64(self, x: tTensor) -> tTensor: return x.to(dtype=torch.int64)
     def astype_uint8(self, x: tTensor) -> tTensor: return x.to(dtype=torch.uint8)
+    def astype_float64(self, x: tTensor) -> tTensor: return x.to(dtype=torch.float64)
     def astype_float32(self, x: tTensor) -> tTensor: return x.to(dtype=torch.float32)
     def astype_float16(self, x: tTensor) -> tTensor: return x.to(dtype=torch.float16)
     def nonzero(self, x: tTensor) -> tuple[tTensor, ...]: return torch.nonzero(x, as_tuple=True)
@@ -483,6 +487,7 @@ class CupyMatOps(MatOps):
     def astype_int32(self, x: Any) -> Any: return x.astype(_imp_cp().int32)
     def astype_int64(self, x: Any) -> Any: return x.astype(_imp_cp().int64)
     def astype_uint8(self, x: Any) -> Any: return x.astype(_imp_cp().uint8)
+    def astype_float64(self, x: Any) -> Any: return x.astype(_imp_cp().float64)
     def astype_float32(self, x: Any) -> Any: return x.astype(_imp_cp().float32)
     def astype_float16(self, x: Any) -> Any: return x.astype(_imp_cp().float16)
     def nonzero(self, x: Any) -> tuple[Any, ...]: return _imp_cp().nonzero(x)
