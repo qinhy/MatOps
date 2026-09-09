@@ -32,53 +32,6 @@ def _tilt_matrix(tau_x, tau_y, *, ops: MatOps, dtype):
     pz[0, 2], pz[1, 2] = (-r[0, 2], -r[1, 2])
     return ops.matmul(pz, r)
 
-def _undistort_normalized(
-    xd: ArrayLike, yd: ArrayLike, distortion: ArrayLike | None, *,
-    ops: MatOps, iterations: int = 5,
-) -> tuple[ArrayLike, ArrayLike]:
-    if ops.shape(xd) != ops.shape(yd):
-        raise ValueError(f'xd/yd shapes must match, got {ops.shape(xd)} and {ops.shape(yd)}')
-    if distortion is None:
-        return (xd, yd)
-    src = ops.flatten(distortion)
-    n = ops.numel(src)
-    if n == 0:
-        return (xd, yd)
-    if n not in (4, 5, 8, 12, 14):
-        raise ValueError('distortion must contain 4, 5, 8, 12, or 14 coefficients')
-    dtype = ops.dtype(xd)
-    d = ops.zeros((14,), dtype=dtype)
-    d[:n] = src
-    k1, k2, p1, p2, k3, k4, k5, k6, s1, s2, s3, s4, tau_x, tau_y = d
-    if n == 14:
-        tilt = _tilt_matrix(tau_x, tau_y, ops=ops, dtype=dtype)
-        inv_tilt = ops.inv(tilt)
-        ones = ops.ones(ops.shape(xd), dtype=dtype)
-        h = ops.stack((xd, yd, ones), dim=1)
-        h = ops.matmul(h, ops.permute(inv_tilt, (1, 0)))
-        x0 = h[:, 0] / h[:, 2]
-        y0 = h[:, 1] / h[:, 2]
-    else:
-        x0 = xd
-        y0 = yd
-    x = ops.copy_mat(x0)
-    y = ops.copy_mat(y0)
-    for _ in range(max(0, int(iterations))):
-        xx = x * x
-        yy = y * y
-        r2 = xx + yy
-        r4 = r2 * r2
-        r6 = r4 * r2
-        numerator = 1.0 + k4 * r2 + k5 * r4 + k6 * r6
-        denominator = 1.0 + k1 * r2 + k2 * r4 + k3 * r6
-        icdist = numerator / denominator
-        xy = x * y
-        dx = 2.0 * p1 * xy + p2 * (r2 + 2.0 * xx) + s1 * r2 + s2 * r4
-        dy = p1 * (r2 + 2.0 * yy) + 2.0 * p2 * xy + s3 * r2 + s4 * r4
-        x = (x0 - dx) * icdist
-        y = (y0 - dy) * icdist
-    return (x, y)
-
 def gray8(image: ArrayLike, *, ops: MatOps) -> ArrayLike:
     """Convert a BGR/BGRA image to 8-bit grayscale."""
     a = image
